@@ -8,14 +8,13 @@ repositories {
 
 kotlin {
     targets {
-        fromPreset(presets.macosX64, 'timestampname') {
-//        fromPreset(presets.linuxX64, 'timestampname') {
+        fromPreset(presets.macosX64, 'posix') {
             compilations.main.outputKinds 'EXECUTABLE'
             compilations.main.entryPoint 'io.github.theindifferent.timestampname.main'
         }
     }
     sourceSets {
-        timestampnameMain {
+        posixMain {
         }
     }
 }
