@@ -11,13 +11,22 @@ kotlin {
         // For ARM, preset should be changed to presets.iosArm32 or presets.iosArm64
         // For Linux, preset should be changed to e.g. presets.linuxX64
         // For MacOS, preset should be changed to e.g. presets.macosX64
-        fromPreset(presets.macosX64, 'main') {
+        fromPreset(presets.macosX64, 'timestampname') {
             compilations.main.outputKinds 'EXECUTABLE'
-            compilations.main.entryPoint 'io.github.theindifferent.timestampname.main'
+            compilations.main.entryPoint 'sample.csvparser.main'
         }
+//        fromPreset(presets.linuxX64, 'timestampname') {
+//            compilations.main.outputKinds 'EXECUTABLE'
+//            compilations.main.entryPoint 'sample.csvparser.main'
+//        }
     }
     sourceSets {
-        posix {
+        timestampnameMain {
+        }
+        commonMain {
+            dependencies {
+                implementation 'org.jetbrains.kotlin:kotlin-stdlib-common'
+            }
         }
     }
 }
