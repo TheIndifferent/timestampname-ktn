@@ -1,0 +1,23 @@
+plugins {
+    id 'kotlin-multiplatform' version '1.3.11'
+}
+
+repositories {
+    mavenCentral()
+}
+
+kotlin {
+    targets {
+        // For ARM, preset should be changed to presets.iosArm32 or presets.iosArm64
+        // For Linux, preset should be changed to e.g. presets.linuxX64
+        // For MacOS, preset should be changed to e.g. presets.macosX64
+        fromPreset(presets.macosX64, 'main') {
+            compilations.main.outputKinds 'EXECUTABLE'
+            compilations.main.entryPoint 'io.github.theindifferent.timestampname.main'
+        }
+    }
+    sourceSets {
+        posix {
+        }
+    }
+}

@@ -1,0 +1,6 @@
+# IDE project:
+.idea/
+*.iml
+
+# Gradle build output:
+build/
