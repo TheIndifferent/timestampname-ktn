@@ -2,11 +2,75 @@ package io.github.theindifferent.timestampname
 
 import kotlinx.cinterop.*
 import platform.posix.*
+import kotlin.system.exitProcess
 
-fun main(args: Array<String>) {
+private class CmdArgs(var dryRun: Boolean,
+                      var debug: Boolean,
+                      var noPrefix: Boolean,
+                      var timezone: String)
+
+private fun parseArgs(args: Array<String>): CmdArgs {
+    var dryRun = false
+    var debug = false
+    var noPrefix = false
+    var timezone = "0"
+    for (arg in args) {
+        if (arg == "-h") {
+            // TODO show help and exit
+            continue
+        }
+        if (arg == "-dry") {
+            dryRun = true
+            continue
+        }
+        if (arg == "-debug") {
+            debug = true
+            continue
+        }
+        if (arg == "-noprefix") {
+            noPrefix = true
+            continue
+        }
+        if (arg.startsWith("-timezone=")) {
+            timezone = arg.substring(IntRange("-timezone=".length, arg.length - 1))
+            continue
+        }
+        // if we are still here - got unrecognized argument:
+        throw Exception("unrecognized argument: " + arg)
+    }
+    return CmdArgs(dryRun, debug, noPrefix, timezone)
 }
 
-fun parseLine(line: String, separator: Char) : List<String> {
+private var debugOutput = false
+
+fun debug(message: String) {
+    if (debugOutput) {
+        printStdout("## $message\n")
+    }
+}
+
+fun info(message: String) {
+    printStdout(message)
+}
+
+fun main(args: Array<String>) {
+    try {
+
+        val cmdArgs = parseArgs(args)
+        debugOutput = cmdArgs.debug
+
+        info("Scanning files... ")
+        for (file in FolderListing()) {
+            info("    $file\n")
+        }
+
+    } catch (ex: Exception) {
+        printStderr(ex.message ?: "Unknown failure")
+        exitProcess(1)
+    }
+}
+
+fun parseLine(line: String, separator: Char): List<String> {
     val result = mutableListOf<String>()
     val builder = StringBuilder()
     var quotes = 0
@@ -16,7 +80,8 @@ fun parseLine(line: String, separator: Char) : List<String> {
                 quotes++
                 builder.append(ch)
             }
-            (ch == '\n') || (ch ==  '\r') -> {}
+            (ch == '\n') || (ch == '\r') -> {
+            }
             (ch == separator) && (quotes % 2 == 0) -> {
                 result.add(builder.toString())
                 builder.setLength(0)
