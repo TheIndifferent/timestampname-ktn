@@ -1,5 +1,7 @@
 package io.github.theindifferent.timestampname
 
+import io.github.theindifferent.timestampname.extractors.TiffTimestampExtractor
+import io.github.theindifferent.timestampname.extractors.TimestampExtractor
 import kotlinx.cinterop.*
 import platform.posix.*
 import kotlin.system.exitProcess
@@ -53,16 +55,42 @@ fun info(message: String) {
     printStdout(message)
 }
 
+fun createExtractors(): List<TimestampExtractor> {
+    return listOf(
+            TiffTimestampExtractor()
+    )
+}
+
+data class FileMetadata(val fileName: String, val creationTimestamp: String)
+
+private fun processFiles(files: List<String>): List<FileMetadata> {
+    val extractors = createExtractors()
+    val list = mutableListOf<FileMetadata>()
+
+    files@ for ((index, file) in files.withIndex()) {
+        info("\rProcessing files: $index/${files.size}...")
+        val ext = file.substringAfterLast('.').toLowerCase()
+        for (extractor in extractors) {
+            if (extractor.isSupportedExtension(ext)) {
+
+            }
+        }
+    }
+    info("done.\n")
+    return list
+}
+
 fun main(args: Array<String>) {
     try {
 
         val cmdArgs = parseArgs(args)
         debugOutput = cmdArgs.debug
 
-        info("Scanning files... ")
-        for (file in FolderListing()) {
-            info("    $file\n")
-        }
+        info("Scanning for files... ")
+        val files = listFiles()
+        info("${files.size} supported files found.\n")
+
+        val processedMetadata = processFiles(files)
 
     } catch (ex: Exception) {
         printStderr(ex.message ?: "Unknown failure")
