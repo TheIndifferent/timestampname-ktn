@@ -4,11 +4,12 @@ import kotlinx.cinterop.*
 import platform.posix.*
 
 private fun printToStream(stream: CPointer<FILE>?, message: String) {
-    val i = fprintf(stream, message)
-    if (i < 0) {
-        val error = ferror(stream)
-        throw ErrnoException("print to console", error)
+    if (fprintf(stream, message) < 0) {
+        throw ErrnoException("print to console", ferror(stream))
     }
+//    if (fflush(stream) != 0) {
+//        throw ErrnoException("flush the console", ferror(stream))
+//    }
 }
 
 fun printStdout(message: String) {
