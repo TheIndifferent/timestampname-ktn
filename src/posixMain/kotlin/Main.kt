@@ -1,7 +1,6 @@
 package io.github.theindifferent.timestampname
 
-import io.github.theindifferent.timestampname.extractors.TiffTimestampExtractor
-import io.github.theindifferent.timestampname.extractors.TimestampExtractor
+import io.github.theindifferent.timestampname.extractors.ExtractorStrategy
 import kotlinx.cinterop.*
 import platform.posix.*
 import kotlin.system.exitProcess
@@ -55,26 +54,16 @@ fun info(message: String) {
     printStdout(message)
 }
 
-fun createExtractors(): List<TimestampExtractor> {
-    return listOf(
-            TiffTimestampExtractor()
-    )
-}
-
 data class FileMetadata(val fileName: String, val creationTimestamp: String)
 
 private fun processFiles(files: List<String>): List<FileMetadata> {
-    val extractors = createExtractors()
     val list = mutableListOf<FileMetadata>()
+    val strategy = ExtractorStrategy()
 
-    files@ for ((index, file) in files.withIndex()) {
+    for ((index, filename) in files.withIndex()) {
         info("\rProcessing files: $index/${files.size}...")
-        val ext = file.substringAfterLast('.').toLowerCase()
-        for (extractor in extractors) {
-            if (extractor.isSupportedExtension(ext)) {
-
-            }
-        }
+        val creationTimestamp = strategy.extractCreationTimestamp(filename) ?: continue
+        list.add(FileMetadata(filename, creationTimestamp))
     }
     info("done.\n")
     return list
@@ -88,10 +77,14 @@ fun main(args: Array<String>) {
 
         info("Scanning for files... ")
         val files = listFiles()
-        info("${files.size} supported files found.\n")
+        info("${files.size} files found.\n")
 
         val processedMetadata = processFiles(files)
 
+    } catch (errnoEx: ErrnoException) {
+        val strErr = strerror(errnoEx.err)?.toKString() ?: "error code ${errnoEx.err}"
+        printStderr("\nOperation failed,\n\toperation: ${errnoEx.operation}\n\tfailure: $strErr\n")
+        exitProcess(1)
     } catch (ex: Exception) {
         printStderr(ex.message ?: "Unknown failure")
         exitProcess(1)

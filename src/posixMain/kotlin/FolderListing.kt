@@ -40,11 +40,13 @@ fun listFiles(): List<String> {
             // if error changed during the iteration - throw:
             if (errnoBefore != errno) {
                 debug("error changed: $errnoBefore => $errno")
-                throw Exception(strerror(errno)?.toKString())
+                throw ErrnoException("listing cwd", errno)
             }
         } finally {
             debug("closing dir $openDir")
-            closedir(openDir)
+            if (closedir(openDir) != 0) {
+                throw ErrnoException("closing cwd", errno)
+            }
         }
     }
     return files

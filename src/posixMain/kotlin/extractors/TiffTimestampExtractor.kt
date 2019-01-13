@@ -1,11 +1,28 @@
 package io.github.theindifferent.timestampname.extractors
 
-class TiffTimestampExtractor : TimestampExtractor {
-    override fun isSupportedExtension(extension: String): Boolean {
-        return extension == "dng" && extension == "nef"
+import io.github.theindifferent.timestampname.readers.FileReader
+
+class TiffTimestampExtractor(private val filename: String) : TimestampExtractor {
+
+    companion object : ExtractorFactory {
+        override fun isSupported(fileExtension: String): Boolean {
+            return fileExtension == "dng" || fileExtension == "nef"
+        }
+
+        override fun create(filename: String): TimestampExtractor {
+            return TiffTimestampExtractor(filename)
+        }
+
     }
 
-    override fun extractMetadataCreationTimestamp(file: String): String {
-        return ""
+    override fun extractMetadataCreationTimestamp(): String {
+        val fileReader = FileReader.createFileReader(filename)
+        try {
+
+            return ""
+        } finally {
+            fileReader.close()
+        }
     }
+
 }

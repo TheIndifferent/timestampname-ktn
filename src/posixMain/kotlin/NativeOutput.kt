@@ -7,8 +7,7 @@ private fun printToStream(stream: CPointer<FILE>?, message: String) {
     val i = fprintf(stream, message)
     if (i < 0) {
         val error = ferror(stream)
-        val str = strerror(error)?.toKString()
-        throw Exception(str)
+        throw ErrnoException("print to console", error)
     }
 }
 
