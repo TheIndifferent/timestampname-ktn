@@ -23,18 +23,18 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
     private val tiffEndianessLittle: Int = 'I'.toInt().shl(8).plus('I'.toInt())
     private val tiffEndianessBig: Int = 'M'.toInt().shl(8).plus('M'.toInt())
 
-    private val dateRegex = Regex("\\d{2}:\\d{2}:\\d{2} \\d{2}:\\d{2}:\\d{2}")
-    private val dateRegexSamsungBug = Regex("\\d{2}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")
+    private val dateRegex = Regex("\\d{4}:\\d{2}:\\d{2} \\d{2}:\\d{2}:\\d{2}")
+    private val dateRegexSamsungBug = Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")
 
     override fun extractMetadataCreationTimestamp(): String {
-        val fileReader = FileReader.createFileReader(fileName)
+        val reader = FileReader.createFileReader(fileName)
         try {
 
-            val bo = checkTiffHeader(fileReader)
+            val bo = checkTiffHeader(reader)
 
             // list of all IFD offsets:
             // Bytes 4-7 The offset (in bytes) of the first IFD.
-            val ifdOffsets = mutableListOf(fileReader.readUInt32(bo))
+            val ifdOffsets = mutableListOf(reader.readUInt32(bo))
             // list of all date tag offsets:
             val dateTagOffsets = mutableListOf<Long>()
             // earliest found date:
@@ -68,13 +68,13 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                         debug("TIFF collecting date at offset: $nextDateOffset")
                         dateTagOffsets.removeAt(0)
                         // check for overflow, seek position +20 bytes expected field length:
-                        if (nextDateOffset + 20 >= fileReader.size()) {
+                        if (nextDateOffset + 20 >= reader.size()) {
                             throw FileException(fileName, "date value offset beyond file length")
                         }
-                        fileReader.seek(nextDateOffset)
-                        val dateValue = fileReader.readString(19)
+                        reader.seek(nextDateOffset)
+                        val dateValue = reader.readString(19)
                         debug("TIFF date value read: $dateValue")
-                        if (earliestDate.length == 0) {
+                        if (earliestDate.isEmpty()) {
                             earliestDate = dateValue
                         } else {
                             if (dateValue < earliestDate) {
@@ -86,24 +86,24 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                         debug("TIFF scavenging IFD at offset: $nextIfdOffset, all offsets: $ifdOffsets")
                         ifdOffsets.removeAt(0)
                         // check for overflow, seek position +2 bytes IFD field count +4 bytes next IFD offset:
-                        if (nextIfdOffset + 6 >= fileReader.size()) {
+                        if (nextIfdOffset + 6 >= reader.size()) {
                             throw FileException(fileName, "IFD offset goes over file length")
                         }
-                        fileReader.seek(nextIfdOffset)
+                        reader.seek(nextIfdOffset)
 
                         // 2-byte count of the number of directory entries (i.e., the number of fields)
-                        val fields = fileReader.readUInt16(bo)
-                        for (i in 0..fields) {
+                        val fields = reader.readUInt16(bo)
+                        for (i in 1..fields) {
                             // Bytes 0-1 The Tag that identifies the field
-                            val fieldTag = fileReader.readUInt16(bo)
+                            val fieldTag = reader.readUInt16(bo)
                             // Bytes 2-3 The field Type
-                            val fieldType = fileReader.readUInt16(bo)
+                            val fieldType = reader.readUInt16(bo)
                             // Bytes 4-7 The number of values, Count of the indicated Type
-                            val fieldCount = fileReader.readUInt32(bo)
+                            val fieldCount = reader.readUInt32(bo)
                             // Bytes 8-11 The Value Offset, the file offset (in bytes) of the Value for the field
-                            val fieldValueOffset = fileReader.readUInt32(bo)
+                            val fieldValueOffset = reader.readUInt32(bo)
 
-                            debug("TIFF field: tag=$fieldTag, type=$fieldType, count=$fieldCount, offset=$fieldValueOffset")
+                            // debug("TIFF field: tag=$fieldTag, type=$fieldType, count=$fieldCount, offset=$fieldValueOffset")
 
                             // 0x0132: DateTime
                             // 0x9003: DateTimeOriginal
@@ -133,7 +133,7 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
 
                         // followed by a 4-byte offset of the next IFD (or 0 if none).
                         // (Do not forget to write the 4 bytes of 0 after the last IFD.)
-                        val parsedIfdOffset = fileReader.readUInt32(bo)
+                        val parsedIfdOffset = reader.readUInt32(bo)
                         debug("TIFF IFD found next IFD offset: $parsedIfdOffset")
                         if (parsedIfdOffset.toInt() != 0) {
                             ifdOffsets.add(parsedIfdOffset)
@@ -146,25 +146,18 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
 
             if (dateRegex.matches(earliestDate) || dateRegexSamsungBug.matches(earliestDate)) {
                 val sb = StringBuilder(earliestDate)
-                debug("1: $sb")
                 sb.deleteCharAt(16)
-                debug("2: $sb")
                 sb.deleteCharAt(13)
-                debug("3: $sb")
                 sb.deleteCharAt(10)
-                debug("4: $sb")
                 sb.deleteCharAt(7)
-                debug("5: $sb")
                 sb.deleteCharAt(4)
-                debug("6: $sb")
-                sb.insert(7, '-')
-                debug("7: $sb")
+                sb.insert(8, '-')
                 return sb.toString()
             }
 
             throw FileException(fileName, "failed to parse Exif date: $earliestDate")
         } finally {
-            fileReader.close()
+            reader.close()
         }
     }
 

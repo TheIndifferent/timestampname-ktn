@@ -28,7 +28,8 @@ class FileReader private constructor(private val fileName: String,
 
     }
 
-    private val readBuffer = nativeHeap.allocArray<ByteVar>(64)
+    private val readBufferSize = 64
+    private val readBuffer = nativeHeap.allocArray<ByteVar>(readBufferSize)
 
     override fun close() {
         nativeHeap.free(readBuffer)
@@ -46,11 +47,11 @@ class FileReader private constructor(private val fileName: String,
             throw ErrnoException("reading file $fileName", errno)
         }
         return if (endianess == Endianess.LITTLE) {
-            readBuffer[0].toInt()
-                    .plus(readBuffer[1].toInt().shl(8))
+            readBuffer[0].toInt().and(0xFF)
+                    .plus(readBuffer[1].toInt().and(0xFF).shl(8))
         } else {
-            readBuffer[0].toInt().shl(8)
-                    .plus(readBuffer[1].toInt())
+            readBuffer[0].toInt().and(0xFF).shl(8)
+                    .plus(readBuffer[1].toInt().and(0xFF))
         }
     }
 
@@ -59,19 +60,23 @@ class FileReader private constructor(private val fileName: String,
             throw ErrnoException("reading file $fileName", errno)
         }
         return if (endianess == Endianess.LITTLE) {
-            readBuffer[0].toLong()
-                    .plus(readBuffer[1].toLong().shl(8))
-                    .plus(readBuffer[2].toLong().shl(16))
-                    .plus(readBuffer[3].toLong().shl(24))
+            readBuffer[0].toLong().and(0xFF)
+                    .plus(readBuffer[1].toLong().and(0xFF).shl(8))
+                    .plus(readBuffer[2].toLong().and(0xFF).shl(16))
+                    .plus(readBuffer[3].toLong().and(0xFF).shl(24))
         } else {
-            readBuffer[0].toLong().shl(24)
-                    .plus(readBuffer[1].toLong().shl(16))
-                    .plus(readBuffer[2].toLong().shl(8))
-                    .plus(readBuffer[3].toLong())
+            readBuffer[0].toLong().and(0xFF).shl(24)
+                    .plus(readBuffer[1].toLong().and(0xFF).shl(16))
+                    .plus(readBuffer[2].toLong().and(0xFF).shl(8))
+                    .plus(readBuffer[3].toLong().and(0xFF))
         }
     }
 
     override fun readString(length: Int): String {
+        if (length > readBufferSize) {
+            // TODO implement proper buffer sizing instead:
+            throw Exception("requested more data than allocated read buffer")
+        }
         if (fread(readBuffer, length.toULong(), 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
