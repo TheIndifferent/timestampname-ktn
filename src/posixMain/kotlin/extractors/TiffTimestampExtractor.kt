@@ -72,7 +72,7 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                             throw FileException(fileName, "date value offset beyond file length")
                         }
                         reader.seek(nextDateOffset)
-                        val dateValue = reader.readString(19)
+                        val dateValue = reader.readString20(19)
                         debug("TIFF date value read: $dateValue")
                         if (earliestDate.isEmpty()) {
                             earliestDate = dateValue

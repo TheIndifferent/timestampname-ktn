@@ -8,7 +8,7 @@ interface Reader {
     fun readUInt16(endianess: Endianess): Int
     // TODO this should be UInt, but API is extremely inconvenient:
     fun readUInt32(endianess: Endianess): Long
-    fun readString(length: Int): String
+    fun readString20(length: Int): String
     fun seek(position: Long)
 
 }
