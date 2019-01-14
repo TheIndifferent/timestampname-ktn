@@ -1,6 +1,7 @@
 package io.github.theindifferent.timestampname.readers
 
 import io.github.theindifferent.timestampname.ErrnoException
+import io.github.theindifferent.timestampname.FileException
 import io.github.theindifferent.timestampname.debug
 import kotlinx.cinterop.*
 import platform.posix.*
@@ -28,6 +29,7 @@ class FileReader private constructor(private val fileName: String,
 
     }
 
+    private var cursor: Long = 0
     private val readBufferSize = 20
     private val readBuffer = nativeHeap.allocArray<ByteVar>(readBufferSize)
 
@@ -43,9 +45,13 @@ class FileReader private constructor(private val fileName: String,
     }
 
     override fun readUInt16(endianess: Endianess): Int {
+        if (cursor + 2 >= size()) {
+            throw FileException(fileName, "reading beyond file size")
+        }
         if (fread(readBuffer, 2, 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
+        cursor += 2
         val b0 = readBuffer[0].toInt() and 0xFF
         val b1 = readBuffer[1].toInt() and 0xFF
         return if (endianess == Endianess.LITTLE) {
@@ -56,9 +62,13 @@ class FileReader private constructor(private val fileName: String,
     }
 
     override fun readUInt32(endianess: Endianess): Long {
+        if (cursor + 4 >= size()) {
+            throw FileException(fileName, "reading beyond file size")
+        }
         if (fread(readBuffer, 4, 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
+        cursor += 4
         val b0 = readBuffer[0].toLong() and 0xFF
         val b1 = readBuffer[1].toLong() and 0xFF
         val b2 = readBuffer[2].toLong() and 0xFF
@@ -75,9 +85,13 @@ class FileReader private constructor(private val fileName: String,
             // TODO implement proper buffer sizing instead:
             throw Exception("requested more data than allocated read buffer")
         }
+        if (cursor + length >= size()) {
+            throw FileException(fileName, "reading beyond file size")
+        }
         if (fread(readBuffer, length.toULong(), 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
+        cursor += length
         return readBuffer.toKString()
     }
 
@@ -85,5 +99,6 @@ class FileReader private constructor(private val fileName: String,
         if (fseek(openFile, position, SEEK_SET) != 0) {
             throw ErrnoException("seeking in file $fileName", ferror(openFile))
         }
+        cursor = position
     }
 }
