@@ -44,6 +44,10 @@ class FileReader private constructor(private val fileName: String,
         return fileSize
     }
 
+    override fun name(): String {
+        return fileName
+    }
+
     override fun readUInt16(endianess: Endianess): Int {
         if (cursor + 2 >= size()) {
             throw FileException(fileName, "reading beyond file size")
@@ -80,7 +84,7 @@ class FileReader private constructor(private val fileName: String,
         }
     }
 
-    override fun readString20(length: Int): String {
+    override fun readString(length: Int): String {
         if (length > readBufferSize) {
             // TODO implement proper buffer sizing instead:
             throw Exception("requested more data than allocated read buffer")
@@ -96,9 +100,27 @@ class FileReader private constructor(private val fileName: String,
     }
 
     override fun seek(position: Long) {
+        if (position >= size()) {
+            throw FileException(fileName, "seeking beyond file size")
+        }
         if (fseek(openFile, position, SEEK_SET) != 0) {
             throw ErrnoException("seeking in file $fileName", ferror(openFile))
         }
         cursor = position
+    }
+
+    override fun fastForward(distance: Long) {
+        val forwardCursor = cursor + distance
+        if (forwardCursor >= size()) {
+            throw FileException(fileName, "seeking beyond file size")
+        }
+        if (fseek(openFile, distance, SEEK_CUR) != 0) {
+            throw ErrnoException("seeking in file $fileName", ferror(openFile))
+        }
+        cursor = forwardCursor
+    }
+
+    override fun sectionReader(limit: Long): Reader {
+        return SectionReader.createSectionReader(this, cursor, limit)
     }
 }

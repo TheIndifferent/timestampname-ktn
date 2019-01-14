@@ -1,6 +1,8 @@
 package io.github.theindifferent.timestampname.extractors
 
+import io.github.theindifferent.timestampname.readers.Reader
+
 interface ExtractorFactory {
     fun isSupported(fileExtension: String): Boolean
-    fun create(filename: String): TimestampExtractor
+    fun create(reader: Reader): TimestampExtractor
 }

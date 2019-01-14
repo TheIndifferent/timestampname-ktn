@@ -3,21 +3,19 @@ package io.github.theindifferent.timestampname.extractors
 import io.github.theindifferent.timestampname.FileException
 import io.github.theindifferent.timestampname.debug
 import io.github.theindifferent.timestampname.readers.Endianess
-import io.github.theindifferent.timestampname.readers.FileReader
 import io.github.theindifferent.timestampname.readers.Reader
 
 // https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFF6.pdf
-class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor {
+class TiffTimestampExtractor(private val reader: Reader) : TimestampExtractor {
 
     companion object : ExtractorFactory {
         override fun isSupported(fileExtension: String): Boolean {
             return fileExtension == "dng" || fileExtension == "nef"
         }
 
-        override fun create(filename: String): TimestampExtractor {
-            return TiffTimestampExtractor(filename)
+        override fun create(reader: Reader): TimestampExtractor {
+            return TiffTimestampExtractor(reader)
         }
-
     }
 
     private val tiffEndianessLittle: Int = 'I'.toInt().shl(8).plus('I'.toInt())
@@ -27,7 +25,6 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
     private val dateRegexSamsungBug = Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")
 
     override fun extractMetadataCreationTimestamp(): String {
-        val reader = FileReader.createFileReader(fileName)
         try {
 
             val bo = checkTiffHeader(reader)
@@ -69,10 +66,10 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                         dateTagOffsets.removeAt(0)
                         // check for overflow, seek position +20 bytes expected field length:
                         if (nextDateOffset + 20 >= reader.size()) {
-                            throw FileException(fileName, "date value offset beyond file length")
+                            throw FileException(reader.name(), "date value offset beyond file length")
                         }
                         reader.seek(nextDateOffset)
-                        val dateValue = reader.readString20(19)
+                        val dateValue = reader.readString(19)
                         debug("TIFF date value read: $dateValue")
                         if (earliestDate.isEmpty()) {
                             earliestDate = dateValue
@@ -87,7 +84,7 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                         ifdOffsets.removeAt(0)
                         // check for overflow, seek position +2 bytes IFD field count +4 bytes next IFD offset:
                         if (nextIfdOffset + 6 >= reader.size()) {
-                            throw FileException(fileName, "IFD offset goes over file length")
+                            throw FileException(reader.name(), "IFD offset goes over file length")
                         }
                         reader.seek(nextIfdOffset)
 
@@ -110,10 +107,10 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                             // 0x9004: DateTimeDigitized
                             if (fieldTag == 0x0132 || fieldTag == 0x9003 || fieldTag == 0x9004) {
                                 if (fieldType != 2) {
-                                    throw FileException(fileName, "expected tag has unexpected type: $fieldTag == $fieldType")
+                                    throw FileException(reader.name(), "expected tag has unexpected type: $fieldTag == $fieldType")
                                 }
                                 if (fieldCount.toInt() != 20) {
-                                    throw FileException(fileName, "expected tag has unexpected size: $fieldTag == $fieldCount")
+                                    throw FileException(reader.name(), "expected tag has unexpected size: $fieldTag == $fieldCount")
                                 }
                                 debug("TIFF IFD value offset for tag: $fieldTag => $fieldValueOffset")
                                 dateTagOffsets.add(fieldValueOffset)
@@ -121,10 +118,10 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                             // 0x8769: ExifIFDPointer
                             if (fieldTag == 0x8769) {
                                 if (fieldType != 4) {
-                                    throw FileException(fileName, "EXIF pointer tag has unexpected type: $fieldTag == $fieldType")
+                                    throw FileException(reader.name(), "EXIF pointer tag has unexpected type: $fieldTag == $fieldType")
                                 }
                                 if (fieldCount.toInt() != 1) {
-                                    throw FileException(fileName, "EXIF pointer tag has unexpected size: $fieldTag == $fieldCount")
+                                    throw FileException(reader.name(), "EXIF pointer tag has unexpected size: $fieldTag == $fieldCount")
                                 }
                                 debug("TIFF IFD Exif offset: $fieldValueOffset")
                                 ifdOffsets.add(fieldValueOffset)
@@ -155,7 +152,7 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                 return sb.toString()
             }
 
-            throw FileException(fileName, "failed to parse Exif date: $earliestDate")
+            throw FileException(reader.name(), "failed to parse Exif date: $earliestDate")
         } finally {
             reader.close()
         }
@@ -181,14 +178,14 @@ class TiffTimestampExtractor(private val fileName: String) : TimestampExtractor 
                 Endianess.LITTLE
             }
             else -> {
-                throw FileException(fileName, "invalid TIFF file header: $tiffHeaderEndianess")
+                throw FileException(reader.name(), "invalid TIFF file header: $tiffHeaderEndianess")
             }
         }
         // Bytes 2-3 An arbitrary but carefully chosen number (42)
         // that further identifies the file as a TIFF file.
         val tiffHeaderMagic = reader.readUInt16(endianess)
         if (tiffHeaderMagic != 42) {
-            throw FileException(fileName, "invalid TIFF magic number: $tiffHeaderMagic")
+            throw FileException(reader.name(), "invalid TIFF magic number: $tiffHeaderMagic")
         }
         return endianess
     }
