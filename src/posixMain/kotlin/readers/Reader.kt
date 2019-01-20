@@ -10,8 +10,8 @@ interface Reader {
     // TODO this should be UInt, but API is extremely inconvenient:
     fun readUInt32(endianess: Endianess): Long
     fun readString(length: Int): String
-    fun seek(position: Long)
-    fun fastForward(distance: Long)
+    fun seek(position: Long): Boolean
+    fun fastForward(distance: Long): Boolean
     fun sectionReader(limit: Long): Reader
 
 }

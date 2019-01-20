@@ -69,7 +69,7 @@ private fun processFiles(files: List<String>): CollectedMetadata {
             longestSourceName = filename.length
         }
     }
-    info("${list.size} supported files found.\n")
+    info(" ${list.size} supported files found.\n")
     return CollectedMetadata(list, longestSourceName)
 }
 

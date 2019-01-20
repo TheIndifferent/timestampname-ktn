@@ -6,6 +6,7 @@ import io.github.theindifferent.timestampname.debug
 import kotlinx.cinterop.*
 import platform.posix.*
 
+@Suppress("EXPERIMENTAL_API_USAGE", "EXPERIMENTAL_UNSIGNED_LITERALS")
 class FileReader private constructor(private val fileName: String,
                                      private val fileSize: Long,
                                      private val openFile: CPointer<FILE>) : Reader {
@@ -16,8 +17,8 @@ class FileReader private constructor(private val fileName: String,
             var fileSize: Long = 0
             memScoped {
                 val fileStat = alloc<stat>()
-                // TODO figure out how to do this with fstat:
-                if (stat(fileName, fileStat.ptr) != 0) {
+                val fileNo = fileno(openFile)
+                if (fstat(fileNo, fileStat.ptr) != 0) {
                     throw ErrnoException("stat on $fileName", errno)
                 }
                 debug("stat read, size: $fileName = ${fileStat.st_size}")
@@ -55,6 +56,7 @@ class FileReader private constructor(private val fileName: String,
         if (fread(readBuffer, 2, 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
+        debug("${name()} FileReader.readUInt16($endianess), cursor: $cursor 2 bytes read: ${readBuffer[0]}, ${readBuffer[1]}")
         cursor += 2
         val b0 = readBuffer[0].toInt() and 0xFF
         val b1 = readBuffer[1].toInt() and 0xFF
@@ -96,31 +98,49 @@ class FileReader private constructor(private val fileName: String,
             throw ErrnoException("reading file $fileName", errno)
         }
         cursor += length
-        return readBuffer.toKString()
+        val result = readBuffer.toKString()
+        memset(readBuffer, 0, readBufferSize.toULong())
+        return result
     }
 
-    override fun seek(position: Long) {
+    override fun seek(position: Long): Boolean {
         if (position >= size()) {
             throw FileException(fileName, "seeking beyond file size")
         }
+        debug("${name()} FileReader.seek(..), position: $position, size: ${size()}")
         if (fseek(openFile, position, SEEK_SET) != 0) {
-            throw ErrnoException("seeking in file $fileName", ferror(openFile))
+            val streamError = ferror(openFile)
+            val err = if (streamError != 0) {
+                streamError
+            } else {
+                errno
+            }
+            throw ErrnoException("seeking in file $fileName", err)
         }
         cursor = position
+        return cursor == size() - 1
     }
 
-    override fun fastForward(distance: Long) {
+    override fun fastForward(distance: Long): Boolean {
         val forwardCursor = cursor + distance
         if (forwardCursor >= size()) {
             throw FileException(fileName, "seeking beyond file size")
         }
+        debug("${name()} FileReader.fastForward(..), position: $forwardCursor, size: ${size()}")
         if (fseek(openFile, distance, SEEK_CUR) != 0) {
             throw ErrnoException("seeking in file $fileName", ferror(openFile))
         }
         cursor = forwardCursor
+        return cursor == size() - 1
     }
 
     override fun sectionReader(limit: Long): Reader {
+        if (cursor.toULong() + limit.toULong() > Long.MAX_VALUE.toULong()) {
+            throw FileException(name(), "section reader overflows uint32")
+        }
+        if (cursor + limit > size()) {
+            throw FileException(name(), "section reader overflows file size")
+        }
         return SectionReader.createSectionReader(this, cursor, limit)
     }
 }

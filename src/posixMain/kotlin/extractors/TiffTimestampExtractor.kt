@@ -25,137 +25,135 @@ class TiffTimestampExtractor(private val reader: Reader) : TimestampExtractor {
     private val dateRegexSamsungBug = Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")
 
     override fun extractMetadataCreationTimestamp(): String {
-        try {
+        val bo = checkTiffHeader(reader)
+        debug("TIFF endianess: $bo")
 
-            val bo = checkTiffHeader(reader)
+        // list of all IFD offsets:
+        // Bytes 4-7 The offset (in bytes) of the first IFD.
+        val ifdOffsets = mutableListOf(reader.readUInt32(bo))
+        // list of all date tag offsets:
+        val dateTagOffsets = mutableListOf<Long>()
+        // earliest found date:
+        var earliestDate = ""
 
-            // list of all IFD offsets:
-            // Bytes 4-7 The offset (in bytes) of the first IFD.
-            val ifdOffsets = mutableListOf(reader.readUInt32(bo))
-            // list of all date tag offsets:
-            val dateTagOffsets = mutableListOf<Long>()
-            // earliest found date:
-            var earliestDate = ""
+        while (true) {
+            if (ifdOffsets.size == 0 && dateTagOffsets.size == 0) {
+                debug("TIFF no more offsets to scavenge")
+                break
+            }
+            // TODO should sorting happen here?
+            // sorting to traverse file forward-only:
+            ifdOffsets.sort()
+            dateTagOffsets.sort()
 
-            while (true) {
-                if (ifdOffsets.size == 0 && dateTagOffsets.size == 0) {
-                    debug("TIFF no more offsets to scavenge")
-                    break
+            if (ifdOffsets.size > 0 || dateTagOffsets.size > 0) {
+
+                // TODO remove this ugly hack, maybe split big method into submethods:
+                val nextDateOffset = if (dateTagOffsets.size > 0) {
+                    dateTagOffsets[0]
+                } else {
+                    Long.MAX_VALUE
                 }
-                // TODO should sorting happen here?
-                // sorting to traverse file forward-only:
-                ifdOffsets.sort()
-                dateTagOffsets.sort()
+                val nextIfdOffset = if (ifdOffsets.size > 0) {
+                    ifdOffsets[0]
+                } else {
+                    Long.MAX_VALUE
+                }
 
-                if (ifdOffsets.size > 0 || dateTagOffsets.size > 0) {
-
-                    // TODO remove this ugly hack, maybe split big method into submethods:
-                    val nextDateOffset = if (dateTagOffsets.size > 0) {
-                        dateTagOffsets[0]
-                    } else {
-                        Long.MAX_VALUE
+                if (nextDateOffset < nextIfdOffset) {
+                    debug("TIFF collecting date at offset: $nextDateOffset")
+                    dateTagOffsets.removeAt(0)
+                    // check for overflow, seek position +20 bytes expected field length:
+                    if (nextDateOffset + 20 >= reader.size()) {
+                        throw FileException(reader.name(), "date value offset beyond file length")
                     }
-                    val nextIfdOffset = if (ifdOffsets.size > 0) {
-                        ifdOffsets[0]
+                    reader.seek(nextDateOffset)
+                    val dateValue = reader.readString(19)
+                    debug("TIFF date value read: $dateValue")
+                    if (earliestDate.isEmpty()) {
+                        earliestDate = dateValue
                     } else {
-                        Long.MAX_VALUE
-                    }
-
-                    if (nextDateOffset < nextIfdOffset) {
-                        debug("TIFF collecting date at offset: $nextDateOffset")
-                        dateTagOffsets.removeAt(0)
-                        // check for overflow, seek position +20 bytes expected field length:
-                        if (nextDateOffset + 20 >= reader.size()) {
-                            throw FileException(reader.name(), "date value offset beyond file length")
-                        }
-                        reader.seek(nextDateOffset)
-                        val dateValue = reader.readString(19)
-                        debug("TIFF date value read: $dateValue")
-                        if (earliestDate.isEmpty()) {
+                        if (dateValue < earliestDate) {
+                            debug("TIFF replacing old value with new value: $earliestDate => $dateValue")
                             earliestDate = dateValue
-                        } else {
-                            if (dateValue < earliestDate) {
-                                debug("TIFF replacing old value with new value: $earliestDate => $dateValue")
-                                earliestDate = dateValue
+                        }
+                    }
+                } else {
+                    debug("TIFF scavenging IFD at offset: $nextIfdOffset, all offsets: $ifdOffsets")
+                    ifdOffsets.removeAt(0)
+                    // check for overflow, seek position +2 bytes IFD field count +4 bytes next IFD offset:
+                    if (nextIfdOffset + 6 >= reader.size()) {
+                        throw FileException(reader.name(), "IFD offset goes over file length")
+                    }
+                    reader.seek(nextIfdOffset)
+
+                    // 2-byte count of the number of directory entries (i.e., the number of fields)
+                    val fields = reader.readUInt16(bo)
+                    debug("TIFF fields: $fields")
+                    for (i in 1..fields) {
+                        // Bytes 0-1 The Tag that identifies the field
+                        val fieldTag = reader.readUInt16(bo)
+                        // Bytes 2-3 The field Type
+                        val fieldType = reader.readUInt16(bo)
+                        // Bytes 4-7 The number of values, Count of the indicated Type
+                        val fieldCount = reader.readUInt32(bo)
+                        // Bytes 8-11 The Value Offset, the file offset (in bytes) of the Value for the field
+                        val fieldValueOffset = reader.readUInt32(bo)
+
+                        debug("TIFF field: tag=$fieldTag, type=$fieldType, count=$fieldCount, offset=$fieldValueOffset")
+
+                        // 0x0132: DateTime
+                        // 0x9003: DateTimeOriginal
+                        // 0x9004: DateTimeDigitized
+                        if (fieldTag == 0x0132 || fieldTag == 0x9003 || fieldTag == 0x9004) {
+                            if (fieldType != 2) {
+                                throw FileException(reader.name(), "expected tag has unexpected type: $fieldTag == $fieldType")
                             }
-                        }
-                    } else {
-                        debug("TIFF scavenging IFD at offset: $nextIfdOffset, all offsets: $ifdOffsets")
-                        ifdOffsets.removeAt(0)
-                        // check for overflow, seek position +2 bytes IFD field count +4 bytes next IFD offset:
-                        if (nextIfdOffset + 6 >= reader.size()) {
-                            throw FileException(reader.name(), "IFD offset goes over file length")
-                        }
-                        reader.seek(nextIfdOffset)
-
-                        // 2-byte count of the number of directory entries (i.e., the number of fields)
-                        val fields = reader.readUInt16(bo)
-                        for (i in 1..fields) {
-                            // Bytes 0-1 The Tag that identifies the field
-                            val fieldTag = reader.readUInt16(bo)
-                            // Bytes 2-3 The field Type
-                            val fieldType = reader.readUInt16(bo)
-                            // Bytes 4-7 The number of values, Count of the indicated Type
-                            val fieldCount = reader.readUInt32(bo)
-                            // Bytes 8-11 The Value Offset, the file offset (in bytes) of the Value for the field
-                            val fieldValueOffset = reader.readUInt32(bo)
-
-                            // debug("TIFF field: tag=$fieldTag, type=$fieldType, count=$fieldCount, offset=$fieldValueOffset")
-
-                            // 0x0132: DateTime
-                            // 0x9003: DateTimeOriginal
-                            // 0x9004: DateTimeDigitized
-                            if (fieldTag == 0x0132 || fieldTag == 0x9003 || fieldTag == 0x9004) {
-                                if (fieldType != 2) {
-                                    throw FileException(reader.name(), "expected tag has unexpected type: $fieldTag == $fieldType")
-                                }
-                                if (fieldCount.toInt() != 20) {
-                                    throw FileException(reader.name(), "expected tag has unexpected size: $fieldTag == $fieldCount")
-                                }
-                                debug("TIFF IFD value offset for tag: $fieldTag => $fieldValueOffset")
-                                dateTagOffsets.add(fieldValueOffset)
+                            if (fieldCount.toInt() != 20) {
+                                throw FileException(reader.name(), "expected tag has unexpected size: $fieldTag == $fieldCount")
                             }
-                            // 0x8769: ExifIFDPointer
-                            if (fieldTag == 0x8769) {
-                                if (fieldType != 4) {
-                                    throw FileException(reader.name(), "EXIF pointer tag has unexpected type: $fieldTag == $fieldType")
-                                }
-                                if (fieldCount.toInt() != 1) {
-                                    throw FileException(reader.name(), "EXIF pointer tag has unexpected size: $fieldTag == $fieldCount")
-                                }
-                                debug("TIFF IFD Exif offset: $fieldValueOffset")
-                                ifdOffsets.add(fieldValueOffset)
+                            debug("TIFF IFD value offset for tag: $fieldTag => $fieldValueOffset")
+                            dateTagOffsets.add(fieldValueOffset)
+                        }
+                        // 0x8769: ExifIFDPointer
+                        if (fieldTag == 0x8769) {
+                            if (fieldType != 4) {
+                                throw FileException(reader.name(), "EXIF pointer tag has unexpected type: $fieldTag == $fieldType")
                             }
+                            if (fieldCount.toInt() != 1) {
+                                throw FileException(reader.name(), "EXIF pointer tag has unexpected size: $fieldTag == $fieldCount")
+                            }
+                            debug("TIFF IFD Exif offset: $fieldValueOffset")
+                            ifdOffsets.add(fieldValueOffset)
                         }
+                    }
+                    debug("TIFF $fields parsed, reading next IFD offset...")
 
-                        // followed by a 4-byte offset of the next IFD (or 0 if none).
-                        // (Do not forget to write the 4 bytes of 0 after the last IFD.)
-                        val parsedIfdOffset = reader.readUInt32(bo)
-                        debug("TIFF IFD found next IFD offset: $parsedIfdOffset")
-                        if (parsedIfdOffset.toInt() != 0) {
-                            ifdOffsets.add(parsedIfdOffset)
-                        }
+                    // followed by a 4-byte offset of the next IFD (or 0 if none).
+                    // (Do not forget to write the 4 bytes of 0 after the last IFD.)
+                    val parsedIfdOffset = reader.readUInt32(bo)
+                    debug("TIFF IFD found next IFD offset: $parsedIfdOffset")
+                    if (parsedIfdOffset.toInt() != 0) {
+                        ifdOffsets.add(parsedIfdOffset)
                     }
                 }
             }
-
-            // TODO fast-forward to the end?
-
-            if (dateRegex.matches(earliestDate) || dateRegexSamsungBug.matches(earliestDate)) {
-                val sb = StringBuilder(earliestDate)
-                sb.deleteCharAt(16)
-                sb.deleteCharAt(13)
-                sb.deleteCharAt(10)
-                sb.deleteCharAt(7)
-                sb.deleteCharAt(4)
-                sb.insert(8, '-')
-                return sb.toString()
-            }
-
-            throw FileException(reader.name(), "failed to parse Exif date: $earliestDate")
-        } finally {
-            reader.close()
         }
+
+        // TODO fast-forward to the end?
+
+        if (dateRegex.matches(earliestDate) || dateRegexSamsungBug.matches(earliestDate)) {
+            val sb = StringBuilder(earliestDate)
+            sb.deleteCharAt(16)
+            sb.deleteCharAt(13)
+            sb.deleteCharAt(10)
+            sb.deleteCharAt(7)
+            sb.deleteCharAt(4)
+            sb.insert(8, '-')
+            return sb.toString()
+        }
+
+        throw FileException(reader.name(), "failed to parse Exif date: $earliestDate")
     }
 
     private fun checkTiffHeader(reader: Reader): Endianess {

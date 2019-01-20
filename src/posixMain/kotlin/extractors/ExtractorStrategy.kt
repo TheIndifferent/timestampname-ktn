@@ -9,7 +9,8 @@ class ExtractorStrategy {
     private fun createExtractors(): List<ExtractorFactory> {
         return listOf(
                 TiffTimestampExtractor.Companion,
-                JpegTimestampExtractor.Companion
+                JpegTimestampExtractor.Companion,
+                Cr3TimestampExtractor.Companion
         )
     }
 
@@ -17,9 +18,14 @@ class ExtractorStrategy {
         val ext = fileName.substringAfterLast('.').toLowerCase()
         for (extractor in extractors) {
             if (extractor.isSupported(ext)) {
-                return extractor
-                        .create(FileReader.createFileReader(fileName))
-                        .extractMetadataCreationTimestamp()
+                val reader = FileReader.createFileReader(fileName)
+                try {
+                    return extractor
+                            .create(reader)
+                            .extractMetadataCreationTimestamp()
+                } finally {
+                    reader.close()
+                }
             }
         }
         return null
