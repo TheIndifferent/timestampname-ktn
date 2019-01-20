@@ -56,7 +56,7 @@ class FileReader private constructor(private val fileName: String,
         if (fread(readBuffer, 2, 1, openFile).toInt() != 1) {
             throw ErrnoException("reading file $fileName", errno)
         }
-        debug("${name()} FileReader.readUInt16($endianess), cursor: $cursor 2 bytes read: ${readBuffer[0]}, ${readBuffer[1]}")
+        // debug("${name()} FileReader.readUInt16($endianess), cursor: $cursor 2 bytes read: ${readBuffer[0]}, ${readBuffer[1]}")
         cursor += 2
         val b0 = readBuffer[0].toInt() and 0xFF
         val b1 = readBuffer[1].toInt() and 0xFF
@@ -107,7 +107,7 @@ class FileReader private constructor(private val fileName: String,
         if (position >= size()) {
             throw FileException(fileName, "seeking beyond file size")
         }
-        debug("${name()} FileReader.seek(..), position: $position, size: ${size()}")
+        // debug("${name()} FileReader.seek(..), position: $position, size: ${size()}")
         if (fseek(openFile, position, SEEK_SET) != 0) {
             val streamError = ferror(openFile)
             val err = if (streamError != 0) {
@@ -126,7 +126,7 @@ class FileReader private constructor(private val fileName: String,
         if (forwardCursor >= size()) {
             throw FileException(fileName, "seeking beyond file size")
         }
-        debug("${name()} FileReader.fastForward(..), position: $forwardCursor, size: ${size()}")
+        // debug("${name()} FileReader.fastForward(..), position: $forwardCursor, size: ${size()}")
         if (fseek(openFile, distance, SEEK_CUR) != 0) {
             throw ErrnoException("seeking in file $fileName", ferror(openFile))
         }
