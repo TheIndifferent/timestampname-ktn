@@ -13,7 +13,7 @@ class TiffTimestampExtractor(private val reader: Reader) : TimestampExtractor {
             return fileExtension == "dng" || fileExtension == "nef"
         }
 
-        override fun create(reader: Reader): TimestampExtractor {
+        override fun create(reader: Reader, utc: Boolean): TimestampExtractor {
             return TiffTimestampExtractor(reader)
         }
     }

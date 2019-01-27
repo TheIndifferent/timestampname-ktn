@@ -5,20 +5,22 @@ import kotlinx.cinterop.toKString
 import platform.posix.strerror
 import kotlin.system.exitProcess
 
-private class CmdArgs(var dryRun: Boolean,
-                      var debug: Boolean,
-                      var noPrefix: Boolean,
-                      var timezone: String)
+private class CmdArgs(val dryRun: Boolean,
+                      val debug: Boolean,
+                      val noPrefix: Boolean,
+                      val utc: Boolean,
+                      val timezone: String)
 
 private fun parseArgs(args: Array<String>): CmdArgs {
     var dryRun = false
     var debug = false
     var noPrefix = false
+    var utc = false
     var timezone = "0"
     for (arg in args) {
         if (arg == "-h") {
-            // TODO show help and exit
-            continue
+            printHelp()
+            exitProcess(0)
         }
         if (arg == "-dry") {
             dryRun = true
@@ -32,14 +34,19 @@ private fun parseArgs(args: Array<String>): CmdArgs {
             noPrefix = true
             continue
         }
+        if (arg == "-utc") {
+            utc = true
+            continue
+        }
         if (arg.startsWith("-timezone=")) {
+            // TODO implement timezone adjustment if shot in different TZ than processed
             timezone = arg.substring(IntRange("-timezone=".length, arg.length - 1))
             continue
         }
         // if we are still here - got unrecognized argument:
-        throw Exception("unrecognized argument: " + arg)
+        throw Exception("unrecognized argument: $arg")
     }
-    return CmdArgs(dryRun, debug, noPrefix, timezone)
+    return CmdArgs(dryRun, debug, noPrefix, utc, timezone)
 }
 
 private var debugOutput = false
@@ -56,9 +63,9 @@ fun info(message: String) {
 
 private data class CollectedMetadata(val metadata: List<FileMetadata>, val longestSourceName: Int)
 
-private fun processFiles(files: List<String>): CollectedMetadata {
+private fun processFiles(cmdArgs: CmdArgs, files: List<String>): CollectedMetadata {
     val list = mutableListOf<FileMetadata>()
-    val strategy = ExtractorStrategy()
+    val strategy = ExtractorStrategy(cmdArgs.utc)
     var longestSourceName = 0
 
     for ((index, filename) in files.withIndex()) {
@@ -83,7 +90,7 @@ fun main(args: Array<String>) {
         val files = listFiles()
         info("${files.size} files found.\n")
 
-        val collectedMetadata = processFiles(files)
+        val collectedMetadata = processFiles(cmdArgs, files)
         info("Preparing rename operations...")
         val operations = Renamer(cmdArgs.noPrefix).prepareRenameOperations(collectedMetadata.metadata)
         info(" done.\n")

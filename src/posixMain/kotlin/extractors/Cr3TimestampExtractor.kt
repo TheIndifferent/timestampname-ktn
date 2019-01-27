@@ -12,7 +12,7 @@ class Cr3TimestampExtractor(private val reader: Reader) : TimestampExtractor {
             return fileExtension == "cr3"
         }
 
-        override fun create(reader: Reader): TimestampExtractor {
+        override fun create(reader: Reader, utc: Boolean): TimestampExtractor {
             return Cr3TimestampExtractor(reader)
         }
     }
@@ -23,15 +23,14 @@ class Cr3TimestampExtractor(private val reader: Reader) : TimestampExtractor {
         val canonBoxReader = qtParser.quicktimeSearchUuidBox(moovBoxReader, "85c0b687820f11e08111f4ce462b6a48")
 
         val cmt1BoxReader = qtParser.quicktimeSearchBox(canonBoxReader, "CMT1")
-        val cmt1Timestamp = TiffTimestampExtractor.create(cmt1BoxReader).extractMetadataCreationTimestamp()
+        val cmt1Timestamp = TiffTimestampExtractor.create(cmt1BoxReader, false).extractMetadataCreationTimestamp()
 
         // TODO find a way to read TIFF to the end so we don't have to seek:
-        debug("cr3 before seek")
+        debug("cr3 rewing to the beginning of canon box")
         canonBoxReader.seek(0)
-        debug("cr3 after seek")
 
         val cmt2BoxReader = qtParser.quicktimeSearchBox(canonBoxReader, "CMT2")
-        val cmt2Timestamp = TiffTimestampExtractor.create(cmt2BoxReader).extractMetadataCreationTimestamp()
+        val cmt2Timestamp = TiffTimestampExtractor.create(cmt2BoxReader, false).extractMetadataCreationTimestamp()
 
         return if (cmt1Timestamp < cmt2Timestamp) {
             cmt1Timestamp

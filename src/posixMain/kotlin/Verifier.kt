@@ -22,8 +22,9 @@ class Verifier {
                 if (operation.from != operation.to) {
                     if (stat(operation.to, fileStat.ptr) == 0) {
                         throw FileException(operation.to, "file exists on filesystem")
-                    } else {
-                        debug("stat error code: $errno, expected: $ENOENT")
+                    }
+                    if (errno != ENOENT) {
+                        throw FileException(operation.to, "expected 'Not Found', received: $errno")
                     }
                 }
             }

@@ -2,7 +2,7 @@ package io.github.theindifferent.timestampname.extractors
 
 import io.github.theindifferent.timestampname.readers.FileReader
 
-class ExtractorStrategy {
+class ExtractorStrategy(private val utc: Boolean) {
 
     private val extractors = createExtractors()
 
@@ -10,7 +10,8 @@ class ExtractorStrategy {
         return listOf(
                 TiffTimestampExtractor.Companion,
                 JpegTimestampExtractor.Companion,
-                Cr3TimestampExtractor.Companion
+                Cr3TimestampExtractor.Companion,
+                Mp4TimestampExtractor.Companion
         )
     }
 
@@ -21,7 +22,7 @@ class ExtractorStrategy {
                 val reader = FileReader.createFileReader(fileName)
                 try {
                     return extractor
-                            .create(reader)
+                            .create(reader, utc)
                             .extractMetadataCreationTimestamp()
                 } finally {
                     reader.close()

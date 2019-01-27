@@ -15,7 +15,7 @@ class JpegTimestampExtractor(private val reader: Reader) : TimestampExtractor {
             return fileExtension == "jpg" || fileExtension == "jpeg"
         }
 
-        override fun create(reader: Reader): TimestampExtractor {
+        override fun create(reader: Reader, utc: Boolean): TimestampExtractor {
             return JpegTimestampExtractor(reader)
         }
     }
@@ -48,7 +48,7 @@ class JpegTimestampExtractor(private val reader: Reader) : TimestampExtractor {
                 //   -2 exif header suffix
                 val fieldReader = reader.sectionReader(fieldLength.toLong() - 8)
                 return TiffTimestampExtractor
-                        .create(fieldReader)
+                        .create(fieldReader, false)
                         .extractMetadataCreationTimestamp()
             } else {
                 // length includes the length itself:
